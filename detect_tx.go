@@ -195,5 +195,5 @@ func TxTo(t *types.Transaction) (common.Address, error) {
 		return common.Address{}, err
 	}
 
-	return msg.From, nil
+	return *msg.To, nil
 }
