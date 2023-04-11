@@ -1,2 +1,2 @@
-# tx-decoder
-There is a ethereum transaction decoder
+# tx-detector
+There is a ethereum transaction detector
