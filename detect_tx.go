@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog/log"
@@ -40,8 +39,11 @@ type DetectorSettings struct {
 
 var DETECTOR_STATE DetectorState
 var DETECTOR_SETTINGS DetectorSettings
+var ETH_USDC_POOL_ADDRESS = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"
+var ETH_USDT_POOL_ADDRESS = "0x11b815efB8f581194ae79006d24E0d814B7697F6"
+var POOL_TOPICS []string
 
-func topics() {
+func topics() []string {
 	swapEvent := "Swap(address,address,int256,int256,uint160,uint128,int24)"
 	mintEvent := "Mint(address,address,int24,int24,uint128 amount,uint256,uint256)"
 	burnEvent := "Burn(address,int24,int24,uint128,uint256,uint256)"
@@ -53,10 +55,16 @@ func topics() {
 	fmt.Printf("swapTopic: 0x%x\n", swapTopic)
 	fmt.Printf("mintTopic: 0x%x\n", mintTopic)
 	fmt.Printf("burnTopic: 0x%x\n", burnTopic)
+
+	swapTopicString := "0x" + hex.EncodeToString(swapTopic)
+	mintTopicString := "0x" + hex.EncodeToString(mintTopic)
+	burnTopicString := "0x" + hex.EncodeToString(burnTopic)
+
+	return []string{swapTopicString, mintTopicString, burnTopicString}
 }
 
 func detectBlocks() {
-	topics()
+	POOL_TOPICS = topics()
 	defer WG.Done()
 
 	log.Info().Msg("Enter detectBlocks")
@@ -183,17 +191,41 @@ func processBlockManager(number *big.Int) error {
 		log.Error().Err(err).Msg("")
 		return err
 	}
-	fmt.Println("BlockNumber:", block.Number().Int64(), "Txs:", block.Transactions(), "blockHash:", block.Hash())
+	// fmt.Println("BlockNumber:", block.Number().Int64(), "Txs:", block.Transactions(), "blockHash:", block.Hash())
 	DETECTOR_SETTINGS.LastProcessedBlock = number.Int64()
 	DETECTOR_STATE.LastBlockNumber = number.Uint64()
+
+	if err := processTxs(block.Transactions()); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func TxTo(t *types.Transaction) (common.Address, error) {
-	msg, err := core.TransactionToMessage(t, types.LatestSignerForChainID(t.ChainId()), t.GasPrice())
-	if err != nil {
-		return common.Address{}, err
+func processTxs(txs types.Transactions) error {
+	for _, tx := range txs {
+		receipt, err := CLIENT.TransactionReceipt(context.Background(), tx.Hash())
+		if err != nil {
+			return err
+		}
+
+		logs := receipt.Logs
+
+		for _, txLog := range logs {
+			if txLog.Address.String() != ETH_USDC_POOL_ADDRESS && txLog.Address.String() != ETH_USDT_POOL_ADDRESS {
+				continue
+			}
+
+			for _, topic := range txLog.Topics {
+				if !Contains(POOL_TOPICS, topic.String()) {
+					continue
+				}
+
+				log.Info().Msg(tx.Hash().String())
+				// TODO: decode events
+			}
+		}
 	}
 
-	return *msg.To, nil
+	return nil
 }
