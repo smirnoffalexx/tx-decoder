@@ -39,13 +39,19 @@ type DetectorSettings struct {
 
 var DETECTOR_STATE DetectorState
 var DETECTOR_SETTINGS DetectorSettings
-var ETH_USDC_POOL_ADDRESS = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"
-var ETH_USDT_POOL_ADDRESS = "0x11b815efB8f581194ae79006d24E0d814B7697F6"
+var UNISWAP_POOLS []string
 var POOL_TOPICS []string
+
+func pools() []string {
+	ethUSDCPool := "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"
+	ethUSDTPool := "0x11b815efB8f581194ae79006d24E0d814B7697F6"
+
+	return []string{ethUSDCPool, ethUSDTPool}
+}
 
 func topics() []string {
 	swapEvent := "Swap(address,address,int256,int256,uint160,uint128,int24)"
-	mintEvent := "Mint(address,address,int24,int24,uint128 amount,uint256,uint256)"
+	mintEvent := "Mint(address,address,int24,int24,uint128,uint256,uint256)"
 	burnEvent := "Burn(address,int24,int24,uint128,uint256,uint256)"
 
 	swapTopic := crypto.Keccak256([]byte(swapEvent))
@@ -64,6 +70,7 @@ func topics() []string {
 }
 
 func detectBlocks() {
+	UNISWAP_POOLS = pools()
 	POOL_TOPICS = topics()
 	defer WG.Done()
 
@@ -212,7 +219,7 @@ func processTxs(txs types.Transactions) error {
 		logs := receipt.Logs
 
 		for _, txLog := range logs {
-			if txLog.Address.String() != ETH_USDC_POOL_ADDRESS && txLog.Address.String() != ETH_USDT_POOL_ADDRESS {
+			if !Contains(UNISWAP_POOLS, txLog.Address.String()) {
 				continue
 			}
 
