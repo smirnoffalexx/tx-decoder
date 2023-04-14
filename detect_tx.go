@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -227,23 +228,50 @@ func processTxs(txs types.Transactions) error {
 			}
 
 			fmt.Println("topics:", txLog.Topics)
+			fmt.Println("logData:", hex.EncodeToString(txLog.Data))
 
-			if !Contains(mapKeysToSlice(POOL_TOPICS), txLog.Topics[0].String()) {
+			zeroTopic := txLog.Topics[0].String()
+
+			if !Contains(mapKeysToSlice(POOL_TOPICS), zeroTopic) {
 				continue
 			}
 
-			for _, topic := range txLog.Topics {
-				if !Contains(mapKeysToSlice(POOL_TOPICS), topic.String()) {
-					continue
-				}
+			eventName, _ := parseEvent(POOL_TOPICS[zeroTopic])
+			// params := []string{}
+			params := make(map[string]string)
 
-				name, _ := parseEvent(POOL_TOPICS[topic.String()])
-
-				// logData := decodeLogData(args, hex.EncodeToString(txLog.Data))
-
-				log.Info().Msg(name + ", txHash: " + tx.Hash().String() + ", contarctAddress: " +
-					txLog.Address.String()) // + "logData: " + strings.Join(logData, ", "))
+			if eventName == "Swap" {
+				params["sender"] = "0x" + txLog.Topics[1].String()[26:]
+				params["recepient"] = "0x" + txLog.Topics[2].String()[26:]
+				// params = append(params, "0x"+txLog.Topics[1].String()[26:]) // sender
+				// params = append(params, "0x"+txLog.Topics[2].String()[26:]) // recepient
+				// decode int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick
 			}
+
+			if eventName == "Mint" {
+				params["owner"] = "0x" + txLog.Topics[1].String()[26:]
+				// params = append(params, "0x"+txLog.Topics[1].String()[26:]) // owner
+				// params = append(params, "0x"+txLog.Topics[2].String())      // tickLower int24
+				// params = append(params, "0x"+txLog.Topics[3].String())      // tickUpper int24
+				// decode address sender, uint128 amount, uint256 amount0, uint256 amount1
+			}
+
+			if eventName == "Burn" {
+				params["owner"] = "0x" + txLog.Topics[1].String()[26:]
+				// params = append(params, "0x"+txLog.Topics[1].String()[24:]) // owner
+				// params = append(params, "0x"+txLog.Topics[2].String())      // tickLower int24
+				// params = append(params, "0x"+txLog.Topics[3].String())      // tickUpper int24
+				// decode uint128 amount, uint256 amount0, uint256 amount1
+			}
+
+			paramsJSON, err := json.Marshal(params)
+			if err != nil {
+				log.Error().Err(err)
+				return err
+			}
+
+			log.Info().Msg(eventName + ", txHash: " + tx.Hash().String() + ", contarctAddress: " +
+				txLog.Address.String() + ", params: " + string(paramsJSON)) // strings.Join(params, ", "))
 		}
 	}
 
