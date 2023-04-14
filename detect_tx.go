@@ -40,7 +40,7 @@ type DetectorSettings struct {
 var DETECTOR_STATE DetectorState
 var DETECTOR_SETTINGS DetectorSettings
 var UNISWAP_POOLS []string
-var POOL_TOPICS []string
+var POOL_TOPICS map[string]string
 
 func pools() []string {
 	ethUSDCPool := "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"
@@ -49,7 +49,7 @@ func pools() []string {
 	return []string{ethUSDCPool, ethUSDTPool}
 }
 
-func topics() []string {
+func topics() {
 	swapEvent := "Swap(address,address,int256,int256,uint160,uint128,int24)"
 	mintEvent := "Mint(address,address,int24,int24,uint128,uint256,uint256)"
 	burnEvent := "Burn(address,int24,int24,uint128,uint256,uint256)"
@@ -66,12 +66,15 @@ func topics() []string {
 	mintTopicString := "0x" + hex.EncodeToString(mintTopic)
 	burnTopicString := "0x" + hex.EncodeToString(burnTopic)
 
-	return []string{swapTopicString, mintTopicString, burnTopicString}
+	POOL_TOPICS = make(map[string]string)
+	POOL_TOPICS[swapTopicString] = swapEvent
+	POOL_TOPICS[mintTopicString] = mintEvent
+	POOL_TOPICS[burnTopicString] = burnEvent
 }
 
 func detectBlocks() {
 	UNISWAP_POOLS = pools()
-	POOL_TOPICS = topics()
+	topics()
 	defer WG.Done()
 
 	log.Info().Msg("Enter detectBlocks")
@@ -223,16 +226,47 @@ func processTxs(txs types.Transactions) error {
 				continue
 			}
 
+			fmt.Println("topics:", txLog.Topics)
+
+			if !Contains(mapKeysToSlice(POOL_TOPICS), txLog.Topics[0].String()) {
+				continue
+			}
+
 			for _, topic := range txLog.Topics {
-				if !Contains(POOL_TOPICS, topic.String()) {
+				if !Contains(mapKeysToSlice(POOL_TOPICS), topic.String()) {
 					continue
 				}
 
-				log.Info().Msg(tx.Hash().String())
-				// TODO: decode events
+				name, _ := parseEvent(POOL_TOPICS[topic.String()])
+
+				// logData := decodeLogData(args, hex.EncodeToString(txLog.Data))
+
+				log.Info().Msg(name + ", txHash: " + tx.Hash().String() + ", contarctAddress: " +
+					txLog.Address.String()) // + "logData: " + strings.Join(logData, ", "))
 			}
 		}
 	}
 
 	return nil
+}
+
+func decodeLogData(args []string, hexData string) []string {
+	fmt.Println("logData:", hexData)
+	startIndex := 0
+	data := []string{}
+	for _, arg := range args {
+		param := hexData[startIndex : startIndex+64]
+		fmt.Println(param)
+
+		if arg == "address" {
+			param = "0x" + param[20:]
+		} else {
+
+		}
+
+		data = append(data, param)
+		startIndex = startIndex + 64
+	}
+
+	return data
 }
