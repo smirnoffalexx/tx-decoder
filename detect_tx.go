@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -236,32 +237,31 @@ func processTxs(txs types.Transactions) error {
 				continue
 			}
 
-			eventName, _ := parseEvent(POOL_TOPICS[zeroTopic])
-			// params := []string{}
+			eventName, args := parseEvent(POOL_TOPICS[zeroTopic])
 			params := make(map[string]string)
 
 			if eventName == "Swap" {
-				params["sender"] = "0x" + txLog.Topics[1].String()[26:]
-				params["recepient"] = "0x" + txLog.Topics[2].String()[26:]
-				// params = append(params, "0x"+txLog.Topics[1].String()[26:]) // sender
-				// params = append(params, "0x"+txLog.Topics[2].String()[26:]) // recepient
-				// decode int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick
+				params["sender"] = "0x" + txLog.Topics[1].String()[26:] // because full length 64 and len(address) = 40 and len(0x) = 2
+				params["recipient"] = "0x" + txLog.Topics[2].String()[26:]
+				params["args"] = strings.Join(args, ", ")
+				// decode args: int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick
 			}
 
 			if eventName == "Mint" {
 				params["owner"] = "0x" + txLog.Topics[1].String()[26:]
+				params["args"] = strings.Join(args, ", ")
 				// params = append(params, "0x"+txLog.Topics[1].String()[26:]) // owner
 				// params = append(params, "0x"+txLog.Topics[2].String())      // tickLower int24
 				// params = append(params, "0x"+txLog.Topics[3].String())      // tickUpper int24
-				// decode address sender, uint128 amount, uint256 amount0, uint256 amount1
+				// decode args: address sender, uint128 amount, uint256 amount0, uint256 amount1
 			}
 
 			if eventName == "Burn" {
 				params["owner"] = "0x" + txLog.Topics[1].String()[26:]
-				// params = append(params, "0x"+txLog.Topics[1].String()[24:]) // owner
+				params["args"] = strings.Join(args, ", ")
 				// params = append(params, "0x"+txLog.Topics[2].String())      // tickLower int24
 				// params = append(params, "0x"+txLog.Topics[3].String())      // tickUpper int24
-				// decode uint128 amount, uint256 amount0, uint256 amount1
+				// decode args: uint128 amount, uint256 amount0, uint256 amount1
 			}
 
 			paramsJSON, err := json.Marshal(params)
