@@ -238,14 +238,17 @@ func processTxs(txs types.Transactions) error {
 				continue
 			}
 
-			eventName, args := parseEvent(POOL_TOPICS[zeroTopic])
+			eventName, _ := parseEvent(POOL_TOPICS[zeroTopic])
 			params := make(map[string]string)
 
 			if eventName == "Swap" {
 				params["sender"] = "0x" + txLog.Topics[1].String()[26:] // because full length 64 and len(address) = 40 and len(0x) = 2
 				params["recipient"] = "0x" + txLog.Topics[2].String()[26:]
-				params["args"] = strings.Join(args, ", ")
-				// decode args: int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick
+				decodeLogData(
+					"int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick",
+					hex.EncodeToString(txLog.Data),
+					&params,
+				)
 			}
 
 			if eventName == "Mint" {
@@ -262,9 +265,11 @@ func processTxs(txs types.Transactions) error {
 					log.Error().Msg("Can't parse tickUpper")
 				}
 				params["tickUpper"] = tickUpperBigInt.String()
-
-				params["args"] = strings.Join(args, ", ")
-				// decode args: address sender, uint128 amount, uint256 amount0, uint256 amount1
+				decodeLogData(
+					"address sender,uint128 amount,uint256 amount0,uint256 amount1",
+					hex.EncodeToString(txLog.Data),
+					&params,
+				)
 			}
 
 			if eventName == "Burn" {
@@ -281,9 +286,11 @@ func processTxs(txs types.Transactions) error {
 					log.Error().Msg("Can't parse tickUpper")
 				}
 				params["tickUpper"] = tickUpperBigInt.String()
-
-				params["args"] = strings.Join(args, ", ")
-				// decode args: uint128 amount, uint256 amount0, uint256 amount1
+				decodeLogData(
+					"uint128 amount,uint256 amount0,uint256 amount1",
+					hex.EncodeToString(txLog.Data),
+					&params,
+				)
 			}
 
 			paramsJSON, err := json.Marshal(params)
@@ -293,30 +300,32 @@ func processTxs(txs types.Transactions) error {
 			}
 
 			log.Info().Msg(eventName + ", txHash: " + tx.Hash().String() + ", contarctAddress: " +
-				txLog.Address.String() + ", params: " + string(paramsJSON)) // strings.Join(params, ", "))
+				txLog.Address.String() + ", params: " + string(paramsJSON))
 		}
 	}
 
 	return nil
 }
 
-func decodeLogData(args []string, hexData string) []string {
-	fmt.Println("logData:", hexData)
+func decodeLogData(args string, hexData string, params *map[string]string) {
+	parts := strings.Split(args, ",")
 	startIndex := 0
-	data := []string{}
-	for _, arg := range args {
-		param := hexData[startIndex : startIndex+64]
-		fmt.Println(param)
 
-		if arg == "address" {
-			param = "0x" + param[20:]
+	for _, part := range parts {
+		argWithType := strings.Split(part, " ")
+		arg := ""
+
+		if argWithType[0] == "address" {
+			arg = "0x" + hexData[startIndex+24:startIndex+24+40]
 		} else {
-
+			argBigInt, ok := math.ParseBig256("0x" + hexData[startIndex:startIndex+64])
+			if !ok {
+				log.Error().Msg("Can't parse int param")
+			}
+			arg = argBigInt.String()
 		}
 
-		data = append(data, param)
-		startIndex = startIndex + 64
+		(*params)[argWithType[1]] = arg
+		startIndex += 64
 	}
-
-	return data
 }
