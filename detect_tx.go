@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog/log"
@@ -249,18 +250,39 @@ func processTxs(txs types.Transactions) error {
 
 			if eventName == "Mint" {
 				params["owner"] = "0x" + txLog.Topics[1].String()[26:]
+
+				tickLowerBigInt, ok := math.ParseBig256(txLog.Topics[2].String()) // tickLower int24
+				if !ok {
+					log.Error().Msg("Can't parse tickLower")
+				}
+				params["tickLower"] = tickLowerBigInt.String()
+
+				tickUpperBigInt, ok := math.ParseBig256(txLog.Topics[3].String()) // tickUpper int24
+				if !ok {
+					log.Error().Msg("Can't parse tickUpper")
+				}
+				params["tickUpper"] = tickUpperBigInt.String()
+
 				params["args"] = strings.Join(args, ", ")
-				// params = append(params, "0x"+txLog.Topics[1].String()[26:]) // owner
-				// params = append(params, "0x"+txLog.Topics[2].String())      // tickLower int24
-				// params = append(params, "0x"+txLog.Topics[3].String())      // tickUpper int24
 				// decode args: address sender, uint128 amount, uint256 amount0, uint256 amount1
 			}
 
 			if eventName == "Burn" {
 				params["owner"] = "0x" + txLog.Topics[1].String()[26:]
+
+				tickLowerBigInt, ok := math.ParseBig256(txLog.Topics[2].String()) // tickLower int24
+				if !ok {
+					log.Error().Msg("Can't parse tickLower")
+				}
+				params["tickLower"] = tickLowerBigInt.String()
+
+				tickUpperBigInt, ok := math.ParseBig256(txLog.Topics[3].String()) // tickUpper int24
+				if !ok {
+					log.Error().Msg("Can't parse tickUpper")
+				}
+				params["tickUpper"] = tickUpperBigInt.String()
+
 				params["args"] = strings.Join(args, ", ")
-				// params = append(params, "0x"+txLog.Topics[2].String())      // tickLower int24
-				// params = append(params, "0x"+txLog.Topics[3].String())      // tickUpper int24
 				// decode args: uint128 amount, uint256 amount0, uint256 amount1
 			}
 
